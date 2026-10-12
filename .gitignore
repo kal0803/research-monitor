@@ -1,4 +1,33 @@
+
+# Python virtual environment
 .venv/
+
+# Secrets and environment variables
 .env
+.env.*
+!.env.example
+
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Runtime data and outputs
+data/
+outputs/
+
+# Recovery and temporary archives
+recovery/
+rubric_v1_package/
+rubric_v2_package/
+*.zip
+
+# System files
+.DS_Store
+.streamlit/secrets.toml
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+*.log
+.pytest_cache/

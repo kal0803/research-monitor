@@ -1,576 +1,393 @@
-import re
-import requests
+from datetime import timedelta
 
-from bs4 import BeautifulSoup
-from datetime import datetime
-from urllib.parse import urljoin
-
-from collectors.base import BaseNewsCollector
-from config import NEWS_SOURCES
-from models import Article
+from collectors.generic import GenericNewsCollector
 
 
-SOURCE = NEWS_SOURCES["cennews"]
+class CENewsCollector(GenericNewsCollector):
 
-SECTION_URL = (
-    "http://www.cennews.co.kr/"
-    "news/articleList.html?"
-    "sc_sub_section_code=S2N1"
-)
+    source_key = "cennews"
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 "
-        "(KHTML, like Gecko) "
-        "Chrome/130.0 Safari/537.36"
-    ),
-    "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
-}
+    pagination_enabled = True
 
+    max_pages = 50
+    old_page_stop_streak = 2
 
-def clean_text(text):
-    if not text:
-        return ""
+    candidate_margin_days = 3
 
-    return re.sub(
-        r"\s+",
-        " ",
-        text
-    ).strip()
+    # ========================================================
+    # DETAIL DATE PRIORITY
+    # ========================================================
 
-
-def collect_cennews_article_urls():
-    """
-    건설산업신문 건설 섹션의
-    기사 URL을 수집한다.
-    """
-
-    response = requests.get(
-        SECTION_URL,
-        headers=HEADERS,
-        timeout=30,
-    )
-
-    response.raise_for_status()
-
-    soup = BeautifulSoup(
-        response.text,
-        "html.parser"
-    )
-
-    urls = []
-
-    for link in soup.find_all(
-        "a",
-        href=True
+    def choose_published_at(
+        self,
+        url,
+        detail_published_at,
     ):
+        """
+        건설산업신문은 상세페이지에 표시되는
+        '승인' 날짜를 최종 기사 날짜로 사용한다.
 
-        href = link.get(
-            "href",
-            ""
+        목록 날짜는 최종 판정에 사용하지 않는다.
+        """
+
+        metadata = self._listing_metadata.get(
+            url,
+            {},
         )
 
-        if "articleView.html?idxno=" not in href:
-            continue
-
-        full_url = urljoin(
-            SECTION_URL,
-            href
+        listing_published_at = metadata.get(
+            "published_at"
         )
 
-        if full_url not in urls:
-            urls.append(full_url)
+        if detail_published_at:
 
-    return urls
-
-
-def extract_title(soup):
-    og_title = soup.find(
-        "meta",
-        property="og:title"
-    )
-
-    if og_title:
-
-        title = clean_text(
-            og_title.get(
-                "content",
-                ""
-            )
-        )
-
-        if title:
-
-            return re.sub(
-                r"\s*-\s*건설산업신문\s*$",
-                "",
-                title
-            ).strip()
-
-    h1 = soup.find("h1")
-
-    if h1:
-
-        title = clean_text(
-            h1.get_text(
-                " ",
-                strip=True
-            )
-        )
-
-        if title:
-            return title
-
-    if soup.title:
-
-        title = clean_text(
-            soup.title.get_text(
-                " ",
-                strip=True
-            )
-        )
-
-        return re.sub(
-            r"\s*-\s*건설산업신문\s*$",
-            "",
-            title
-        ).strip()
-
-    return ""
-
-
-def extract_published_at(
-    soup,
-    page_text,
-):
-    """
-    기사 날짜 추출.
-    """
-
-    meta_candidates = [
-        soup.find(
-            "meta",
-            property="article:published_time"
-        ),
-        soup.find(
-            "meta",
-            attrs={
-                "name":
-                "article:published_time"
-            }
-        ),
-        soup.find(
-            "meta",
-            attrs={
-                "name":
-                "date"
-            }
-        ),
-    ]
-
-    for tag in meta_candidates:
-
-        if not tag:
-            continue
-
-        value = tag.get(
-            "content",
-            ""
-        ).strip()
-
-        if not value:
-            continue
-
-        match = re.search(
-            r"(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})"
-            r".*?"
-            r"(\d{1,2}):(\d{2})(?::(\d{2}))?",
-            value,
-        )
-
-        if match:
-
-            parsed = datetime(
-                int(match.group(1)),
-                int(match.group(2)),
-                int(match.group(3)),
-                int(match.group(4)),
-                int(match.group(5)),
-                int(match.group(6) or 0),
+            detail_date = self.published_at_to_date(
+                detail_published_at
             )
 
-            return parsed.strftime(
-                "%Y-%m-%d %H:%M:%S"
+            listing_date = self.published_at_to_date(
+                listing_published_at
             )
 
-    normalized = page_text.replace(
-        "\xa0",
-        " "
-    )
+            if (
+                detail_date is not None
+                and listing_date is not None
+                and detail_date != listing_date
+            ):
 
-    normalized = re.sub(
-        r"\s+",
-        " ",
-        normalized
-    )
-
-    patterns = [
-        (
-            r"기사승인.*?"
-            r"(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})"
-            r"\s+"
-            r"(\d{1,2}):(\d{2})(?::(\d{2}))?"
-        ),
-        (
-            r"승인.*?"
-            r"(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})"
-            r"\s+"
-            r"(\d{1,2}):(\d{2})(?::(\d{2}))?"
-        ),
-        (
-            r"(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})"
-            r"\s+"
-            r"(\d{1,2}):(\d{2})(?::(\d{2}))?"
-        ),
-    ]
-
-    for pattern in patterns:
-
-        match = re.search(
-            pattern,
-            normalized
-        )
-
-        if not match:
-            continue
-
-        parsed = datetime(
-            int(match.group(1)),
-            int(match.group(2)),
-            int(match.group(3)),
-            int(match.group(4)),
-            int(match.group(5)),
-            int(match.group(6) or 0),
-        )
-
-        return parsed.strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
-
-    return None
-
-
-def extract_reporter(page_text):
-    """
-    기자명 추출.
-    """
-
-    match = re.search(
-        r"([가-힣]{2,4})\s*기자",
-        page_text
-    )
-
-    if match:
-        return match.group(1).strip()
-
-    return None
-
-
-def find_article_container(soup):
-    """
-    기사 본문 영역 탐색.
-    """
-
-    selectors = [
-        "#article-view-content-div",
-        ".article-view-content-div",
-        "#articleBody",
-        ".article-body",
-        ".article_body",
-        ".article-content",
-        ".article_content",
-        "article",
-    ]
-
-    for selector in selectors:
-
-        element = soup.select_one(
-            selector
-        )
-
-        if element:
-
-            text = clean_text(
-                element.get_text(
-                    " ",
-                    strip=True
+                print(
+                    f"[{self.source_name}][DATE] "
+                    f"목록={listing_published_at} | "
+                    f"상세승인={detail_published_at} | "
+                    f"{url}"
                 )
-            )
 
-            if len(text) >= 100:
-                return element
+            return detail_published_at
 
-    return None
+        print(
+            f"[WARNING] {self.source_name} "
+            "상세페이지 승인일 확인 불가 | "
+            f"목록={listing_published_at} | "
+            f"{url}"
+        )
 
-
-def extract_caption(container):
-    """
-    이미지 캡션 추출.
-    """
-
-    if container is None:
         return None
 
-    figcaption = container.find(
-        "figcaption"
-    )
+    # ========================================================
+    # HISTORICAL PAGINATION
+    # ========================================================
 
-    if figcaption:
-
-        text = clean_text(
-            figcaption.get_text(
-                " ",
-                strip=True
-            )
-        )
-
-        if text:
-            return text
-
-    for img in container.find_all(
-        "img"
+    def collect_article_urls(
+        self,
+        start_date=None,
+        end_date=None,
     ):
+        """
+        건설산업신문 기사 URL 수집.
 
-        parent = img.parent
+        1. 기존 Generic 페이지 요청 방식 사용
+        2. 목록에서 기사 URL 및 보조 날짜 추출
+        3. 요청 날짜 전후 3일 범위의 후보 확보
+        4. 목록 날짜가 없는 기사도 후보 유지
+        5. 상세페이지 승인일로 최종 판정
+        6. 과거 페이지가 연속 확인되면 탐색 종료
 
-        if not parent:
-            continue
+        기존 본문, 기자명, 캡션 추출은 변경하지 않는다.
+        """
 
-        text = clean_text(
-            parent.get_text(
-                " ",
-                strip=True
+        self._listing_metadata = {}
+
+        if start_date is None:
+            start_date = self._active_start_date
+
+        if end_date is None:
+            end_date = self._active_end_date
+
+        if (start_date is None) != (end_date is None):
+
+            raise ValueError(
+                "start_date와 end_date를 "
+                "모두 지정해야 합니다."
             )
-        )
 
         if (
-            3 <= len(text) <= 250
-            and any(
-                term in text
-                for term in (
-                    "사진",
-                    "제공",
-                    "조감도",
-                    "이미지",
+            start_date is not None
+            and start_date > end_date
+        ):
+
+            raise ValueError(
+                "시작일이 종료일보다 늦습니다."
+            )
+
+        candidate_start = (
+            start_date
+            - timedelta(
+                days=self.candidate_margin_days
+            )
+            if start_date is not None
+            else None
+        )
+
+        candidate_end = (
+            end_date
+            + timedelta(
+                days=self.candidate_margin_days
+            )
+            if end_date is not None
+            else None
+        )
+
+        print(
+            f"[{self.source_name}] "
+            f"후보 기간={candidate_start} ~ "
+            f"{candidate_end} | "
+            "최종 기준=상세페이지 승인일"
+        )
+
+        urls = []
+
+        seen_urls = set()
+        seen_signatures = set()
+
+        old_page_streak = 0
+
+        # ====================================================
+        # PAGE LOOP
+        # ====================================================
+
+        for page_number in range(
+            1,
+            self.max_pages + 1,
+        ):
+
+            page_url = self.build_page_url(
+                page_number
+            )
+
+            try:
+
+                soup = self.get_soup(
+                    page_url
                 )
+
+            except Exception as error:
+
+                print(
+                    f"[WARNING] {self.source_name} "
+                    f"page {page_number} 요청 실패"
+                )
+
+                print(
+                    f"  URL: {page_url}"
+                )
+
+                print(
+                    f"  {error}"
+                )
+
+                print(
+                    f"[WARNING] {self.source_name} "
+                    "페이지 수집이 중단되었습니다. "
+                    "결과가 불완전할 수 있습니다."
+                )
+
+                break
+
+            # =================================================
+            # LIST ENTRIES
+            # =================================================
+
+            entries = self.extract_listing_entries(
+                soup=soup,
+                page_url=page_url,
             )
-        ):
-            return text
 
-    return None
+            if not entries:
 
+                print(
+                    f"[{self.source_name}] "
+                    f"page {page_number}: "
+                    "기사 URL 없음 → 탐색 종료"
+                )
 
-def extract_paragraphs(container):
-    """
-    기사 본문 문단 추출.
-    """
+                break
 
-    if container is None:
-        return []
+            # =================================================
+            # DUPLICATE PAGE DETECTION
+            # =================================================
 
-    paragraphs = []
-
-    for tag in container.find_all(
-        ["p", "div"]
-    ):
-
-        if (
-            tag.name == "div"
-            and tag.find(
-                ["p", "div"],
-                recursive=False
+            signature = tuple(
+                entry["url"]
+                for entry in entries
             )
-        ):
-            continue
 
-        text = clean_text(
-            tag.get_text(
-                " ",
-                strip=True
+            if signature in seen_signatures:
+
+                print(
+                    f"[WARNING] {self.source_name} "
+                    f"page {page_number}: "
+                    "이미 방문한 페이지와 "
+                    "기사 목록 동일 → 탐색 종료"
+                )
+
+                break
+
+            seen_signatures.add(
+                signature
             )
-        )
 
-        if len(text) < 10:
-            continue
+            # =================================================
+            # DATE AND CANDIDATE FILTERING
+            # =================================================
 
-        if any(
-            junk in text
-            for junk in (
-                "저작권자",
-                "무단전재",
-                "재배포금지",
-                "폰트키우기",
-                "폰트줄이기",
-                "프린트하기",
-                "메일보내기",
-                "신고하기",
-            )
-        ):
-            continue
+            known_dates = []
 
-        paragraphs.append(text)
+            missing_date_count = 0
+            matched_candidates = 0
+            outside_margin_count = 0
 
-    result = []
-    seen = set()
+            for entry in entries:
 
-    for paragraph in paragraphs:
+                url = entry["url"]
 
-        if paragraph in seen:
-            continue
+                listing_published_at = entry.get(
+                    "published_at"
+                )
 
-        seen.add(paragraph)
-        result.append(paragraph)
+                listing_date = self.published_at_to_date(
+                    listing_published_at
+                )
 
-    return result
+                if listing_date is None:
 
+                    missing_date_count += 1
 
-def collect_cennews_article(url):
-    """
-    기사 하나를 Article 객체로 변환한다.
-    """
+                else:
 
-    response = requests.get(
-        url,
-        headers=HEADERS,
-        timeout=30,
-    )
+                    known_dates.append(
+                        listing_date
+                    )
 
-    response.raise_for_status()
+                # 목록 날짜는 후보 탐색에만 사용한다.
+                # 날짜가 없으면 상세 확인 후보에 유지한다.
 
-    soup = BeautifulSoup(
-        response.text,
-        "html.parser"
-    )
+                if (
+                    candidate_start is not None
+                    and listing_date is not None
+                    and not (
+                        candidate_start
+                        <= listing_date
+                        <= candidate_end
+                    )
+                ):
 
-    page_text = soup.get_text(
-        "\n",
-        strip=True
-    )
+                    outside_margin_count += 1
 
-    container = find_article_container(
-        soup
-    )
+                    continue
 
-    return Article(
-        source=SOURCE["name"],
-        title=extract_title(
-            soup
-        ),
-        reporter=extract_reporter(
-            page_text
-        ),
-        published_at=extract_published_at(
-            soup,
-            page_text,
-        ),
-        image_caption=extract_caption(
-            container
-        ),
-        paragraphs=extract_paragraphs(
-            container
-        ),
-        url=url,
-    )
+                if url in seen_urls:
+                    continue
 
-
-def is_in_period(
-    article,
-    start_date,
-    end_date,
-):
-    if not article.published_at:
-        return False
-
-    try:
-
-        article_date = datetime.strptime(
-            article.published_at,
-            "%Y-%m-%d %H:%M:%S"
-        ).date()
-
-    except ValueError:
-        return False
-
-    return (
-        start_date
-        <= article_date
-        <= end_date
-    )
-
-
-def collect_cennews_articles(
-    start_date,
-    end_date,
-):
-    urls = collect_cennews_article_urls()
-
-    articles = []
-
-    for url in urls:
-
-        try:
-
-            article = (
-                collect_cennews_article(
+                seen_urls.add(
                     url
                 )
-            )
 
-            if not article.published_at:
-                continue
+                self._listing_metadata[url] = {
+                    "title": entry.get(
+                        "title",
+                        "",
+                    ),
+                    "published_at": listing_published_at,
+                }
 
-            if not is_in_period(
-                article,
-                start_date,
-                end_date,
-            ):
-                continue
+                urls.append(
+                    url
+                )
 
-            articles.append(article)
+                matched_candidates += 1
 
-        except Exception as e:
+            # =================================================
+            # PAGE DATE RANGE
+            # =================================================
+
+            if known_dates:
+
+                page_oldest = min(
+                    known_dates
+                )
+
+                page_newest = max(
+                    known_dates
+                )
+
+                page_range = (
+                    f"{page_oldest} ~ {page_newest}"
+                )
+
+            else:
+
+                page_newest = None
+
+                page_range = (
+                    "목록 날짜 확인 불가"
+                )
 
             print(
-                "[WARNING] "
-                "건설산업신문 기사 처리 실패: "
-                f"{url}"
+                f"[{self.source_name}] "
+                f"page {page_number}: "
+                f"{page_range} | "
+                f"기사 {len(entries)}개 | "
+                f"후보 {matched_candidates}개 | "
+                f"날짜 없음 {missing_date_count}개 | "
+                f"여유 범위 밖 {outside_margin_count}개"
             )
 
-            print(e)
+            # =================================================
+            # PAGINATION STOP
+            # =================================================
 
-    articles.sort(
-        key=lambda article:
-            article.published_at or "",
-        reverse=True,
-    )
+            # 날짜를 모르는 기사가 존재하는 페이지는
+            # 전체가 과거 기사라고 단정하지 않는다.
 
-    return articles
+            if (
+                candidate_start is not None
+                and page_newest is not None
+                and page_newest < candidate_start
+                and missing_date_count == 0
+            ):
 
+                old_page_streak += 1
 
-class CENNewsCollector(
-    BaseNewsCollector
-):
+            else:
 
-    source_name = SOURCE["name"]
+                old_page_streak = 0
 
-    def collect_articles(
-        self,
-        start_date,
-        end_date,
-    ):
-        return collect_cennews_articles(
-            start_date=start_date,
-            end_date=end_date,
+            if (
+                old_page_streak
+                >= self.old_page_stop_streak
+            ):
+
+                print(
+                    f"[{self.source_name}] "
+                    "후보 시작일보다 과거인 "
+                    f"페이지 {old_page_streak}개 "
+                    "연속 → 탐색 종료"
+                )
+
+                break
+
+        else:
+
+            print(
+                f"[WARNING] {self.source_name} "
+                f"최대 탐색 페이지 "
+                f"{self.max_pages}개 도달"
+            )
+
+        print(
+            f"[{self.source_name}] "
+            f"요청 기간 후보 기사 URL "
+            f"{len(urls)}개 확보"
         )
-    
+
+        return urls
