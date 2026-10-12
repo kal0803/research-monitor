@@ -7,6 +7,7 @@ from urllib.parse import urljoin, urlparse, parse_qs
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
+from collectors.browser import launch_chromium
 from collectors.generic import GenericNewsCollector
 
 
@@ -670,9 +671,7 @@ class CENewsCollector(GenericNewsCollector):
 
         with sync_playwright() as p:
 
-            browser = p.chromium.launch(
-                headless=True
-            )
+            browser = launch_chromium(p)
 
             try:
 

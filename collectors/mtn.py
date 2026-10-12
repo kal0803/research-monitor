@@ -8,6 +8,7 @@ from playwright.sync_api import sync_playwright
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from collectors.browser import launch_chromium
 from collectors.base import BaseNewsCollector
 from config import NEWS_SOURCES
 from models import Article
@@ -547,7 +548,7 @@ def collect_mtn_article_candidates(start_date, end_date):
     )
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        browser = launch_chromium(playwright)
 
         try:
             page = browser.new_page(
