@@ -29,7 +29,8 @@ CHECKPOINT_PATH = Path(
 # MODEL / CLASSIFIER SETTINGS
 # ============================================================
 
-MODEL = "gpt-6-sol"
+load_dotenv()
+MODEL = os.getenv("RESEARCH_MONITOR_CLASSIFIER_MODEL", "gpt-6-luna")
 
 REASONING_EFFORT = "low"
 

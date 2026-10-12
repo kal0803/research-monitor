@@ -23,7 +23,8 @@ from sklearn.metrics.pairwise import (
 # SETTINGS
 # ============================================================
 
-MODEL = "gpt-6-sol"
+load_dotenv()
+MODEL = os.getenv("RESEARCH_MONITOR_DEDUP_MODEL", "gpt-6-luna")
 
 REASONING_EFFORT = "low"
 

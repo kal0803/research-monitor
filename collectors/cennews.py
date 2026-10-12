@@ -14,6 +14,14 @@ class CENewsCollector(GenericNewsCollector):
 
     candidate_margin_days = 3
 
+    def decode_response(self, response):
+        for encoding in ("utf-8-sig", "cp949"):
+            try:
+                return response.content.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        return super().decode_response(response)
+
     # ========================================================
     # DETAIL DATE PRIORITY
     # ========================================================
