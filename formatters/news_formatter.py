@@ -254,7 +254,7 @@ def article_subheadings(article):
             result.append(text)
             seen.add(text)
 
-    return result[:3]
+    return result[:8]
 
 
 def source_line(article: Article):
