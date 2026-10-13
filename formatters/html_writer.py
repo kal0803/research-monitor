@@ -6,7 +6,8 @@ from urllib.parse import urlsplit
 
 from formatters.source_links import public_article_url
 from formatters.news_formatter import (
-    excerpt_paragraphs, format_caption, make_byline,
+    excerpt_paragraphs, article_subheadings,
+    format_caption, make_byline,
 )
 
 OUTPUT_DIR = Path("outputs")
@@ -72,6 +73,11 @@ def render_article(article, asset=None, decision="KEEP"):
             + (f"<figcaption>{escape(caption)}</figcaption>" if caption else "")
             + "</figure>"
         )
+    for subtitle in article_subheadings(article):
+        html.append(
+            f"<p><strong>{escape(subtitle)}</strong></p>"
+        )
+
     if paragraphs:
         html.append(f"<p><span class='byline'>{byline}</span> {escape(paragraphs[0])}</p>")
         html.extend(f"<p>{escape(text)}</p>" for text in paragraphs[1:])

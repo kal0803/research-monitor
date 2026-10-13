@@ -6,6 +6,9 @@
 """
 
 import base64
+from io import BytesIO
+from PIL import Image
+from collectors.article_subheading import extract_page_subheadings
 import hashlib
 import ipaddress
 from dataclasses import dataclass
@@ -15,7 +18,7 @@ import requests
 from bs4 import BeautifulSoup
 
 
-MAX_IMAGE_BYTES = 3 * 1024 * 1024
+MAX_IMAGE_BYTES = 6 * 1024 * 1024
 MAX_CANDIDATES = 8
 HTTP_TIMEOUT = (5, 15)
 HEADERS = {
@@ -47,6 +50,8 @@ class ArticleImage:
     url: str
     data_uri: str
     digest: str
+    width: int = 0
+    height: int = 0
 
 
 def usable_url(url):
@@ -179,10 +184,22 @@ def read_image(session, image_url, referer):
         mime = detect_image_mime(payload)
         if mime is None:
             return None
+
+        try:
+            with Image.open(BytesIO(payload)) as image:
+                width, height = image.size
+        except (OSError, ValueError, Image.DecompressionBombError):
+            return None
+
+        if width < 200 or height < 120:
+            return None
+
         return ArticleImage(
             url=response.url,
             data_uri=f"data:{mime};base64,{base64.b64encode(payload).decode('ascii')}",
             digest=hashlib.sha256(payload).hexdigest(),
+            width=width,
+            height=height,
         )
 
 
@@ -198,13 +215,39 @@ def fetch_representative_image(article, excluded_digests=None):
             if not usable_url(page.url):
                 return None
             soup = BeautifulSoup(page.content, "html.parser")
+
+            # 사진 수집과 함께 소제목도 추출한다.
+            article.subheadings = extract_page_subheadings(
+                soup, article
+            )
+
+            best = None
+
             for image_url in candidate_urls(soup, page.url):
                 try:
                     result = read_image(session, image_url, page.url)
-                    if result and result.digest not in excluded_digests:
-                        return result
+
+                    if not result:
+                        continue
+                    if result.digest in excluded_digests:
+                        continue
+
+                    if best is None:
+                        best = result
+                    elif (
+                        result.width >= best.width * 1.25
+                        and result.height >= best.height * 0.7
+                    ):
+                        best = result
+
+                    # 충분히 큰 원문 사진을 확보하면 종료.
+                    if best.width >= 1200 and best.height >= 600:
+                        break
+
                 except (requests.RequestException, ValueError):
                     continue
+
+            return best
     except (requests.RequestException, ValueError) as exc:
         print(f"  [IMAGE WARNING] 원문 접근 실패: {exc}")
     return None

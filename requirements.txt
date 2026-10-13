@@ -39,3 +39,4 @@ urllib3==2.8.0
 streamlit==1.65.0
 
 st-copy==2.0.0
+Pillow>=10,<13
