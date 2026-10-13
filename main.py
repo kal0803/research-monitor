@@ -213,6 +213,7 @@ def run_pipeline(start_date, end_date, progress_callback=None):
     # 12. 최종 기사에만 이미지 요청. 실패해도 기사 출력은 계속한다.
     progress("대표 이미지 수집 중", 0.80)
     image_assets = {}
+    seen_image_digests = {}
     print("\n" + "=" * 60 + "\nARTICLE IMAGES\n" + "=" * 60)
     for idx, article in enumerate(deduplicated, 1):
         progress(
@@ -221,10 +222,16 @@ def run_pipeline(start_date, end_date, progress_callback=None):
         )
         article.image_url = None
         try:
-            asset = fetch_representative_image(article)
+            asset = fetch_representative_image(
+                article,
+                excluded_digests=seen_image_digests.setdefault(
+                    article.source, set()
+                ),
+            )
             if asset:
                 article.image_url = asset.url
                 image_assets[article.url] = asset
+                seen_image_digests[article.source].add(asset.digest)
                 print(f"[{idx}/{len(deduplicated)}] IMAGE | {article.title}")
             else:
                 print(f"[{idx}/{len(deduplicated)}] NO IMAGE | {article.title}")

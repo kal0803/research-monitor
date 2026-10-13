@@ -9,7 +9,7 @@ import base64
 import hashlib
 import ipaddress
 from dataclasses import dataclass
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 import requests
 from bs4 import BeautifulSoup
@@ -38,6 +38,7 @@ BAD_IMAGE_TERMS = (
     "share", "sns", "facebook", "instagram", "kakao", "youtube",
     "loading", "placeholder", "advert", "spinner", "button",
     "og_default", "default_og", "site_default", "site-logo",
+    "dnews.png",
 )
 
 
@@ -90,6 +91,33 @@ def candidate_urls(soup, base_url):
             return
         seen.add(image_url)
         found.append(image_url)
+
+    # 대한경제: td 내부의 기사별 실제 사진을 우선 수집
+    domain = (urlsplit(base_url).hostname or "").lower()
+    if domain == "dnews.co.kr" or domain.endswith(".dnews.co.kr"):
+        idxno = (
+            parse_qs(urlsplit(base_url).query).get("idxno")
+            or [""]
+        )[0]
+
+        for tag in soup.find_all("img"):
+            for attr in (
+                "data-original", "data-src",
+                "data-lazy-src", "src"
+            ):
+                value = normalize_image_url(tag.get(attr), base_url)
+                if not value:
+                    continue
+
+                path = urlsplit(value).path.lower()
+                filename = path.rsplit("/", 1)[-1]
+
+                if "/photo/photo/" in path and (
+                    not idxno or filename.startswith(f"{idxno}-")
+                ):
+                    add(value)
+                    if len(found) >= MAX_CANDIDATES:
+                        return found[:MAX_CANDIDATES]
 
     for selector in BODY_IMAGE_SELECTORS:
         for tag in soup.select(selector):
@@ -158,7 +186,8 @@ def read_image(session, image_url, referer):
         )
 
 
-def fetch_representative_image(article):
+def fetch_representative_image(article, excluded_digests=None):
+    excluded_digests = set(excluded_digests or ())
     url = str(getattr(article, "url", "") or "").strip()
     if not usable_url(url):
         return None
@@ -172,7 +201,7 @@ def fetch_representative_image(article):
             for image_url in candidate_urls(soup, page.url):
                 try:
                     result = read_image(session, image_url, page.url)
-                    if result:
+                    if result and result.digest not in excluded_digests:
                         return result
                 except (requests.RequestException, ValueError):
                     continue
