@@ -2,6 +2,7 @@
 
 import re
 from models import Article
+from formatters.source_links import public_article_url
 
 
 INVALID_REPORTERS = {
@@ -230,7 +231,7 @@ def source_line(article: Article):
     """기존 뉴스 원문보기 형식으로 출처를 출력한다."""
     source = str(article.source or "").strip()
 
-    return f"원문보기[{source}] {article.url}"
+    return f"원문보기[{source}] {public_article_url(article.url)}"
 
 
 def format_article(article: Article) -> str:
