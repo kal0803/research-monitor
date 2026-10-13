@@ -4,6 +4,7 @@ from html import escape
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from formatters.source_links import public_article_url
 from formatters.news_formatter import (
     excerpt_paragraphs, format_caption, make_byline,
 )
@@ -54,7 +55,7 @@ def render_article(article, asset=None, decision="KEEP"):
     byline = escape(make_byline(article.source, article.reporter))
     caption = format_caption(article.image_caption)
     paragraphs = excerpt_paragraphs(article)
-    link = safe_link(article.url)
+    link = safe_link(public_article_url(article.url))
     tag = (
         "<span class='tag review'>REVIEW · 확인 필요</span>"
         if decision == "REVIEW" else "<span class='tag'>KEEP</span>"

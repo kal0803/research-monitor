@@ -17,6 +17,7 @@ import fcntl  # Codespaces / Streamlit Community Cloud: Linux 환경
 import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
+from formatters.source_links import public_article_url
 
 from formatters.news_formatter import (
     excerpt_paragraphs, format_caption, make_byline,
@@ -182,8 +183,8 @@ def show_report(report):
                 st.write(f"{make_byline(article.source, article.reporter)} {paragraphs[0]}")
                 for p in paragraphs[1:]:
                     st.write(p)
-            st.write(f"원문출처 : [{article.source}][{article.published_at or '날짜 미상'}] {article.url}")
-            st.link_button("원문 기사 열기", article.url)
+            st.write(f"원문출처 : [{article.source}][{article.published_at or '날짜 미상'}] {public_article_url(article.url)}")
+            st.link_button("원문 기사 열기", public_article_url(article.url))
 
 
 
