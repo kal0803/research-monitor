@@ -17,6 +17,8 @@ import fcntl  # Codespaces / Streamlit Community Cloud: Linux 환경
 import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
+from st_copy import copy_button
+from formatters.kpsea_formatter import kpsea_html
 from formatters.source_links import public_article_url
 
 from formatters.news_formatter import (
@@ -164,7 +166,7 @@ def show_report(report):
             )
 
     st.subheader("기사별 확인")
-    st.caption("기사 제목과 본문을 각각 선택해 KPSEA 글쓰기 화면에 붙여넣으면 됩니다. 사진은 편집기 지원 여부에 따라 별도 업로드가 필요할 수 있습니다.")
+    st.caption("기사별 복사 아이콘으로 KPSEA용 제목과 HTML 본문을 복사할 수 있습니다.")
     for number, article in enumerate(report["articles"], 1):
         decision = report["decisions_by_url"].get(article.url, "KEEP")
         with st.expander(f"{number:02d}. {article.title} · {decision}"):
@@ -178,6 +180,44 @@ def show_report(report):
                 caption = format_caption(article.image_caption)
                 if caption:
                     st.caption(caption)
+            st.markdown("**KPSEA 게시용 복사**")
+            title_col, html_col = st.columns(2)
+
+            html_content = kpsea_html(
+                article,
+                image_url=asset.url if asset else None,
+            )
+
+            with title_col:
+                st.caption("① 제목 복사")
+                copy_button(
+                    str(article.title or ""),
+                    tooltip="제목 복사",
+                    copied_label="복사 완료",
+                    key=f"kpsea_title_{number}",
+                )
+
+            with html_col:
+                st.caption("② HTML 본문 복사")
+                copy_button(
+                    html_content,
+                    tooltip="KPSEA용 HTML 복사",
+                    copied_label="복사 완료",
+                    key=f"kpsea_html_{number}",
+                )
+
+            with st.popover("복사가 안 될 때 · 수동 복사"):
+                st.caption("각 코드 영역의 복사 아이콘을 사용하세요.")
+                st.code(str(article.title or ""), language=None)
+                st.code(
+                    html_content,
+                    language="html",
+                    wrap_lines=True,
+                    height=180,
+                )
+
+            st.caption("KPSEA 글쓰기의 html 옵션을 켜고 붙여넣으세요.")
+
             paragraphs = excerpt_paragraphs(article)
             if paragraphs:
                 st.write(f"{make_byline(article.source, article.reporter)} {paragraphs[0]}")

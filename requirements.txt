@@ -37,3 +37,5 @@ typing-inspection==0.4.4
 typing_extensions==4.16.0
 urllib3==2.8.0
 streamlit==1.65.0
+
+st-copy==2.0.0
