@@ -318,6 +318,48 @@ def within_date_distance(
     )
 
 
+PHOTO_PAIR_MIN_SIMILARITY = 0.10
+
+
+def photo_same_day_candidate(article_a, article_b, score):
+    """같은 날짜의 짧은 포토기사를 추가 중복 후보로 검토."""
+    if score < PHOTO_PAIR_MIN_SIMILARITY:
+        return False
+
+    date_a = parse_article_date(article_a)
+    date_b = parse_article_date(article_b)
+    if date_a is None or date_a != date_b:
+        return False
+
+    articles = (article_a, article_b)
+    photos = [
+        article for article in articles
+        if re.match(
+            r"^\s*(?:\[포토\]|\[사진\]|\(포토\)|【포토】)",
+            clean_text(getattr(article, "title", "")),
+            re.IGNORECASE,
+        )
+    ]
+
+    if not photos:
+        return False
+
+    if all(len(article_body(a)) > 900 for a in photos):
+        return False
+
+    def terms(article):
+        text = (
+            clean_text(getattr(article, "title", ""))
+            + " " + article_body(article)
+        )
+        return set(
+            re.findall(r"[가-힣]{4,}|[A-Za-z]{4,}", text)
+        )
+
+    shared = terms(article_a) & terms(article_b)
+    return len(shared) >= 2
+
+
 # ============================================================
 # CANDIDATE GENERATION
 # ============================================================
@@ -385,10 +427,15 @@ def generate_candidate_pairs(
                 ]
             )
 
-            if (
-                score
-                < CANDIDATE_SIMILARITY_THRESHOLD
-            ):
+            standard = score >= CANDIDATE_SIMILARITY_THRESHOLD
+            photo_exception = (
+                not standard
+                and photo_same_day_candidate(
+                    articles[i], articles[j], score
+                )
+            )
+
+            if not (standard or photo_exception):
                 continue
 
             candidates.append(
@@ -401,6 +448,8 @@ def generate_candidate_pairs(
 
                     "similarity":
                         score,
+                    "candidate_rule":
+                        "photo_same_day" if photo_exception else "standard",
                 }
             )
 
