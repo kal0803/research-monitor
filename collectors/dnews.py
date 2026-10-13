@@ -15,6 +15,10 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from collectors.base import BaseNewsCollector
+from collectors.article_subheading import (
+    extract_page_subheadings,
+    extract_dnews_prebody_subheadings,
+)
 from config import NEWS_SOURCES
 from models import Article
 
@@ -573,7 +577,7 @@ def collect_dnews_article(url, session=None, listing_date=None):
                 f"{title} | {url}"
             )
 
-        return Article(
+        article = Article(
             source=SOURCE["name"],
             title=title,
             reporter=extract_reporter(page_text),
@@ -582,6 +586,19 @@ def collect_dnews_article(url, session=None, listing_date=None):
             paragraphs=paragraphs,
             url=url,
         )
+
+        article.subheadings = (
+            extract_dnews_prebody_subheadings(soup, article)
+            or extract_page_subheadings(soup, article)
+        )
+
+        if article.subheadings:
+            print(
+                "[대한경제 SUBTITLE] "
+                + " / ".join(article.subheadings)
+            )
+
+        return article
     finally:
         if own_session:
             session.close()

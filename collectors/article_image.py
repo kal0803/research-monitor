@@ -217,9 +217,16 @@ def fetch_representative_image(article, excluded_digests=None):
             soup = BeautifulSoup(page.content, "html.parser")
 
             # 사진 수집과 함께 소제목도 추출한다.
-            article.subheadings = extract_page_subheadings(
+            detected_subheadings = extract_page_subheadings(
                 soup, article
             )
+
+            existing_subheadings = (
+                getattr(article, "subheadings", []) or []
+            )
+
+            if not existing_subheadings:
+                article.subheadings = detected_subheadings[:8]
 
             best = None
 
