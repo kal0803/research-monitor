@@ -227,6 +227,36 @@ def excerpt_paragraphs(
     return excerpt
 
 
+
+def article_subheadings(article):
+    """원문 HTML의 소제목과 본문 앞의 부제목을 병합한다."""
+    result = []
+    seen = set()
+
+    for raw in getattr(article, "subheadings", []) or []:
+        text = " ".join(str(raw).split())
+        if text and text not in seen:
+            result.append(text)
+            seen.add(text)
+
+    for raw in article.paragraphs or []:
+        text = strip_duplicate_byline(
+            raw, article.source, article.reporter
+        )
+        text = " ".join(text.split())
+
+        if not text:
+            continue
+        if not is_leading_subheading(text):
+            break
+
+        if len(text) >= 5 and text not in seen:
+            result.append(text)
+            seen.add(text)
+
+    return result[:3]
+
+
 def source_line(article: Article):
     """기존 뉴스 원문보기 형식으로 출처를 출력한다."""
     source = str(article.source or "").strip()
@@ -256,6 +286,9 @@ def format_article(article: Article) -> str:
             f"이미지 보기: {article.image_url}",
             "",
         ])
+
+    for subheading in article_subheadings(article):
+        lines.extend([subheading, ""])
 
     paragraphs = excerpt_paragraphs(article)
     byline = make_byline(

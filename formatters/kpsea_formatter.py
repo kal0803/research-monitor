@@ -1,9 +1,13 @@
-"""KPSEA 게시판 본문 입력용 HTML."""
+"""KPSEA 게시판용 HTML: 사진, 캡션, 소제목, 본문, 출처."""
+
 from html import escape
 from urllib.parse import urlsplit
 
 from formatters.news_formatter import (
-    excerpt_paragraphs, format_caption, make_byline,
+    excerpt_paragraphs,
+    article_subheadings,
+    format_caption,
+    make_byline,
 )
 from formatters.source_links import public_article_url
 
@@ -12,45 +16,69 @@ def safe_url(value):
     url = str(value or "").strip()
     try:
         parsed = urlsplit(url)
-        return url if parsed.scheme in ("http", "https") and parsed.hostname else ""
+        if parsed.scheme in ("http", "https") and parsed.hostname:
+            return url
     except ValueError:
-        return ""
+        pass
+    return ""
 
 
 def kpsea_html(article, image_url=None):
-    parts = []
+    blocks = []
     title = escape(str(article.title or ""), quote=True)
 
+    # 1. 대표 이미지: 원본보다 강제로 크게 표시하지 않는다.
     image = safe_url(image_url)
+
     if image:
-        parts.append(
-            f'<p><img src="{escape(image, quote=True)}" '
-            f'alt="{title}" width="700" '
-            'style="max-width:100%;height:auto;"></p>'
+        blocks.append(
+            f'<img src="{escape(image, quote=True)}" '
+            f'alt="{title}" '
+            'style="display:block;max-width:100%;height:auto;">'
         )
 
+    # 2. 사진 캡션
     caption = format_caption(article.image_caption)
     if caption:
-        parts.append(f"<p>{escape(caption)}</p>")
+        blocks.append(
+            f'<span style="font-size:13px;">'
+            f'{escape(caption)}</span>'
+        )
 
+    # 3. 원문 소제목
+    for subtitle in article_subheadings(article):
+        blocks.append(
+            f'<strong>{escape(subtitle)}</strong>'
+        )
+
+    # 4. 본문 최대 3문단
     paragraphs = excerpt_paragraphs(article)
     byline = make_byline(article.source, article.reporter)
 
     if paragraphs:
-        parts.append(f"<p>{escape(byline + ' ' + paragraphs[0])}</p>")
+        blocks.append(
+            escape(byline + " " + paragraphs[0])
+        )
         for paragraph in paragraphs[1:]:
-            parts.append(f"<p>{escape(paragraph)}</p>")
+            blocks.append(escape(paragraph))
     else:
-        parts.append("<p>[본문 발췌 실패: 원문 확인 필요]</p>")
+        blocks.append(
+            "[본문 발췌 실패: 원문 확인 필요]"
+        )
 
+    # 5. 원문 링크
     link = safe_url(public_article_url(article.url))
+
     if link:
         safe_link = escape(link, quote=True)
         source = escape(str(article.source or ""))
-        parts.append(
-            f'<p>원문보기[{source}] '
+
+        blocks.append(
+            f'원문보기[{source}] '
             f'<a href="{safe_link}" target="_blank" '
-            f'rel="noopener noreferrer">{safe_link}</a></p>'
+            f'rel="noopener noreferrer">{safe_link}</a>'
         )
 
-    return "\n".join(parts)
+    # <p>의 기본 margin이 제거되는 게시판을 고려해
+    # 실제 줄바꿈 태그를 명시적으로 사용한다.
+    return "<br><br>\n".join(blocks)
