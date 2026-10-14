@@ -269,71 +269,7 @@ def show_saved_report(start, end):
 def main():
     require_password()
     st.title("📰 Research Monitor")
-    st.caption("배포 확인: MTN-FIX-20261014")
     st.caption("6개 언론사 · Rubric v2 분류 · 동일 사건 제거 · 3문단 발췌")
-
-    with st.expander("MTN 실시간 진단 · AI 비용 $0"):
-        if st.button("위례과천선 기사 진단", key="mtn_check"):
-            from types import SimpleNamespace
-            from collectors.mtn import collect_mtn_article
-            from formatters.news_formatter import article_subheadings
-
-            url = (
-                "https://news.mtn.co.kr/news-detail/"
-                "2026101414532746760"
-            )
-
-            probe = SimpleNamespace(
-                source="MTN뉴스",
-                subheadings=[
-                    "구글에서 머니투데이방송 추가"
-                ],
-                paragraphs=[],
-            )
-
-            filter_ok = not article_subheadings(probe)
-
-            try:
-                article = collect_mtn_article(url)
-
-                html = kpsea_html(
-                    article,
-                    image_url=(
-                        "https://menu.mtn.co.kr/upload/article/"
-                        "2026/10/14/"
-                        "2026101414532746760_00_869.jpg"
-                    ),
-                )
-
-                st.session_state["mtn_diagnostic"] = {
-                    "filter_ok": filter_ok,
-                    "caption": article.image_caption,
-                    "subtitles": article_subheadings(article),
-                    "html": html,
-                }
-
-            except Exception as exc:
-                st.error(
-                    f"진단 오류: {type(exc).__name__}: {exc}"
-                )
-
-        result = st.session_state.get("mtn_diagnostic")
-
-        if result:
-            st.write(
-                "출력 모듈 최신 여부:",
-                "정상" if result["filter_ok"] else "구버전 의심",
-            )
-            st.write("사진 설명:", result["caption"])
-            st.write("부제목:", result["subtitles"])
-            st.code(result["html"], language="html")
-
-            copy_button(
-                result["html"],
-                tooltip="진단 HTML 복사",
-                copied_label="복사 완료",
-                key="mtn_diagnostic_copy",
-            )
 
     with st.sidebar:
         st.write("내부 사용자용")
