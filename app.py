@@ -269,6 +269,7 @@ def show_saved_report(start, end):
 def main():
     require_password()
     st.title("📰 Research Monitor")
+    st.caption("배포 확인: MTN-FIX-20261014")
     st.caption("6개 언론사 · Rubric v2 분류 · 동일 사건 제거 · 3문단 발췌")
     with st.sidebar:
         st.write("내부 사용자용")
