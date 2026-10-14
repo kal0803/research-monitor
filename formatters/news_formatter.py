@@ -1,3 +1,4 @@
+from collectors.article_subheading import is_site_ui_text
 """최종 출력용 원문 발췌. Rubric 분류에 사용하는 전체 본문은 수정하지 않는다."""
 
 import re
@@ -31,7 +32,7 @@ def normalize_reporter(reporter):
 def format_caption(caption):
     text = " ".join(str(caption or "").split())
 
-    if not text:
+    if not text or is_site_ui_text(text):
         return None
 
     # 일부 기사에서 이메일이 'ays77@'처럼 잘린 채
@@ -207,7 +208,7 @@ def excerpt_paragraphs(
 
         text = " ".join(text.split())
 
-        if text:
+        if text and not is_site_ui_text(text):
             cleaned.append(text)
 
     # 본문이 시작되기 전의 짧은 부제/소제목만 제외한다.
@@ -235,9 +236,12 @@ def article_subheadings(article):
 
     for raw in getattr(article, "subheadings", []) or []:
         text = " ".join(str(raw).split())
-        if text and text not in seen:
+        if text and text not in seen and not is_site_ui_text(text):
             result.append(text)
             seen.add(text)
+
+    if article.source == "MTN뉴스":
+        return result[:8]
 
     for raw in article.paragraphs or []:
         text = strip_duplicate_byline(

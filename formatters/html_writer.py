@@ -28,7 +28,7 @@ h2 { font-size: 21px; margin: 0 0 14px; line-height: 1.48; word-break: keep-all;
 figure { margin: 8px 0 21px; }
 figure img { width: 100%; max-height: 540px; object-fit: contain;
              border-radius: 8px; background: #f1f3f6; }
-figcaption { color: #667488; font-size: 13px; line-height: 1.6; margin-top: 7px; }
+figcaption { color: #202938; font-size: 15px; line-height: 1.8; margin-top: 7px; }
 p { font-size: 15px; line-height: 1.86; margin: 0 0 15px; overflow-wrap: anywhere; }
 .byline { font-weight: 650; }
 .source-line { font-size: 14px; margin-top: 18px; color: #475569; }

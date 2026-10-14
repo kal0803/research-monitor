@@ -1,3 +1,4 @@
+from collectors.article_subheading import extract_mtn_prebody_subheadings, is_site_ui_text
 import re
 from datetime import datetime, timedelta
 from urllib.parse import urljoin, urlparse
@@ -775,6 +776,99 @@ def find_article_container(soup):
 # CAPTION
 # ============================================================
 
+
+def extract_caption_near_body(page_text, paragraphs):
+    """첫 본문 문단 바로 앞에 있는 사진 설명을 찾는다."""
+    import re
+
+    if not paragraphs:
+        return None
+
+    lines = [
+        clean_text(line)
+        for line in (page_text or "").splitlines()
+        if clean_text(line)
+    ]
+
+    first_body = clean_text(paragraphs[0])[:45]
+    if not first_body:
+        return None
+
+    body_index = next(
+        (
+            i for i, line in enumerate(lines)
+            if first_body in line
+        ),
+        None,
+    )
+
+    if body_index is None:
+        return None
+
+    # 첫 본문 직전의 제한된 영역만 확인한다.
+    region = lines[max(0, body_index - 18):body_index]
+
+    caption_pattern = re.compile(
+        r"(?:제공|사진|촬영)\\s*[=:：]"
+        r"|노선\\s*예정도|노선도|조감도",
+        re.I,
+    )
+
+    for line in reversed(region):
+        if not 7 <= len(line) <= 200:
+            continue
+
+        if is_site_ui_text(line):
+            continue
+
+        if caption_pattern.search(line):
+            return line
+
+    return None
+
+
+
+def extract_mtn_table_caption(soup):
+    """사진 바로 아래의 표 행에서 실제 사진 설명 추출."""
+
+    markers = (
+        "/제공=",
+        "/제공:",
+        "/사진=",
+        "/사진:",
+        "/자료=",
+        "/촬영=",
+        "노선 예정도",
+        "노선도",
+        "조감도",
+    )
+
+    for table in soup.find_all("table"):
+        for row in table.find_all("tr"):
+            if row.find("img") is None:
+                continue
+
+            caption_row = row.find_next_sibling("tr")
+
+            if caption_row is None:
+                continue
+
+            caption = clean_text(
+                caption_row.get_text(" ", strip=True)
+            )
+
+            if not 5 <= len(caption) <= 250:
+                continue
+
+            if is_site_ui_text(caption):
+                continue
+
+            if any(marker in caption for marker in markers):
+                return caption
+
+    return None
+
+
 def extract_caption(soup, container):
     if container:
         figcaption = container.find("figcaption")
@@ -859,7 +953,7 @@ def is_body_junk_line(text):
     if not text:
         return True
 
-    if is_reporter_contact_line(text):
+    if is_reporter_contact_line(text) or is_site_ui_text(text):
         return True
 
     junk_terms = (
@@ -1102,9 +1196,9 @@ def collect_mtn_article(url, session=None):
         container = find_article_container(soup)
         title = extract_title(soup)
 
-        image_caption = extract_caption(
-            soup,
-            container,
+        image_caption = (
+            extract_mtn_table_caption(soup)
+            or extract_caption(soup, container)
         )
 
         paragraphs = extract_paragraphs(
@@ -1115,12 +1209,17 @@ def collect_mtn_article(url, session=None):
             image_caption=image_caption,
         )
 
+        if not image_caption or is_site_ui_text(image_caption):
+            image_caption = extract_caption_near_body(
+                page_text, paragraphs
+            )
+
         published_at = extract_published_at(
             page_text,
             soup,
         )
 
-        return Article(
+        article = Article(
             source=SOURCE["name"],
             title=title,
             reporter=extract_reporter(page_text),
@@ -1129,6 +1228,12 @@ def collect_mtn_article(url, session=None):
             paragraphs=paragraphs,
             url=url,
         )
+
+        article.subheadings = extract_mtn_prebody_subheadings(
+            soup, article
+        )
+
+        return article
 
     finally:
         if own_session:

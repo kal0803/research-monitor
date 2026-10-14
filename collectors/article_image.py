@@ -225,7 +225,10 @@ def fetch_representative_image(article, excluded_digests=None):
                 getattr(article, "subheadings", []) or []
             )
 
-            if not existing_subheadings:
+            if (
+                not existing_subheadings
+                and article.source != "MTN뉴스"
+            ):
                 article.subheadings = detected_subheadings[:8]
 
             best = None

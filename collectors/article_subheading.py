@@ -239,3 +239,72 @@ def extract_dnews_prebody_subheadings(soup, article):
         return []
 
     return subtitles
+
+
+MTN_AUTHOR_OR_DATE = re.compile(
+    r"^(?:[가-힣]{2,5}\s*기자(?:\s|$)|"
+    r"\d{4}[-./]\d{1,2}[-./]\d{1,2}"
+    r"(?:\s+\d{1,2}:\d{2})?)"
+)
+
+
+def is_site_ui_text(value):
+    text = clean(value)
+
+    if "구글에서" in text and "머니투데이방송" in text:
+        return True
+
+    return text in {
+        "뉴스듣기",
+        "공유하기",
+        "기사 공유하기",
+        "채널구독",
+        "구독하기",
+    }
+
+
+def extract_mtn_prebody_subheadings(soup, article):
+    """기사 제목 다음부터 기자명·발행일 전까지의 소제목."""
+    lines = [
+        clean(line)
+        for line in soup.get_text("\n", strip=True).splitlines()
+    ]
+    lines = [line for line in lines if line]
+
+    title = clean(article.title)
+
+    for i, line in enumerate(lines):
+        if line != title:
+            continue
+
+        subtitles = []
+        boundary_found = False
+
+        for candidate in lines[i + 1:i + 15]:
+            if MTN_AUTHOR_OR_DATE.search(candidate):
+                boundary_found = True
+                break
+
+            if is_site_ui_text(candidate):
+                break
+
+            if candidate == title:
+                break
+
+            if not 6 <= len(candidate) <= 145:
+                continue
+
+            if re.search(
+                r"무단전재|저작권|광고|로그인|"
+                r"관련기사|기사입력|구독|공유하기",
+                candidate,
+            ):
+                break
+
+            if candidate not in subtitles:
+                subtitles.append(candidate)
+
+        if boundary_found and 1 <= len(subtitles) <= 8:
+            return subtitles
+
+    return []

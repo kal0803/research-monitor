@@ -40,10 +40,7 @@ def kpsea_html(article, image_url=None):
     # 2. 사진 캡션
     caption = format_caption(article.image_caption)
     if caption:
-        blocks.append(
-            f'<span style="font-size:13px;">'
-            f'{escape(caption)}</span>'
-        )
+        blocks.append(escape(caption))
 
     # 3. 원문 소제목
     for subtitle in article_subheadings(article):
