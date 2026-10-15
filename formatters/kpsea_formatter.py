@@ -27,26 +27,32 @@ def kpsea_html(article, image_url=None):
     blocks = []
     title = escape(str(article.title or ""), quote=True)
 
-    # 1. 대표 이미지: 원본보다 강제로 크게 표시하지 않는다.
-    image = safe_url(image_url)
-
-    if image:
-        blocks.append(
-            f'<img src="{escape(image, quote=True)}" '
-            f'alt="{title}" '
-            'style="display:block;max-width:100%;height:auto;">'
-        )
-
-    # 2. 사진 캡션
-    caption = format_caption(article.image_caption)
-    if caption:
-        blocks.append(escape(caption))
-
-    # 3. 원문 소제목
+    # 1. 기사 부제목을 사진보다 먼저 표시
     for subtitle in article_subheadings(article):
         blocks.append(
             f'<strong>{escape(subtitle)}</strong>'
         )
+
+    # 2. 사진 바로 다음 줄에 설명을 붙여 표시
+    image = safe_url(image_url)
+    caption = format_caption(article.image_caption)
+
+    if image:
+        photo_html = (
+            f'<img src="{escape(image, quote=True)}" '
+            f'alt="{title}" '
+            'style="display:block;max-width:100%;height:auto;'
+            'margin:0;padding:0;">'
+        )
+
+        if caption:
+            # 이미지와 설명 사이에는 br 태그를 넣지 않는다.
+            photo_html += escape(caption)
+
+        blocks.append(photo_html)
+
+    elif caption:
+        blocks.append(escape(caption))
 
     # 4. 본문 최대 3문단
     paragraphs = excerpt_paragraphs(article)

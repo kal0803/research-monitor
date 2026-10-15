@@ -275,24 +275,18 @@ def format_article(article: Article) -> str:
         "",
     ]
 
-    # 이미지 URL이 없어도 캡션 자체가 있으면 출력한다.
-    caption = format_caption(article.image_caption)
+    for subheading in article_subheadings(article):
+        lines.extend([subheading, ""])
 
-    if caption:
-        lines.extend([
-            caption,
-            "",
-        ])
-
-    # 기존 이미지 링크 출력 기능은 유지한다.
     if article.image_url:
         lines.extend([
             f"이미지 보기: {article.image_url}",
             "",
         ])
 
-    for subheading in article_subheadings(article):
-        lines.extend([subheading, ""])
+    caption = format_caption(article.image_caption)
+    if caption:
+        lines.extend([caption, ""])
 
     paragraphs = excerpt_paragraphs(article)
     byline = make_byline(

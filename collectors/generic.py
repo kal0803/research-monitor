@@ -12,6 +12,7 @@ from urllib.parse import (
     urlunsplit,
 )
 
+from collectors.article_subheading import (extract_article_prebody_subheadings, extract_page_subheadings)
 from collectors.base import BaseNewsCollector
 from config import NEWS_SOURCES
 from models import Article
@@ -1352,7 +1353,7 @@ class GenericNewsCollector(
             )
         )
 
-        return Article(
+        article = Article(
             source=self.source_name,
 
             title=self.extract_title(
@@ -1375,6 +1376,16 @@ class GenericNewsCollector(
 
             url=url,
         )
+
+
+        # 이미지 수집 단계에 의존하지 않고 소제목을 저장.
+        if self.source_name in ("건설타임즈", "안전신문"):
+            article.subheadings = (
+                extract_article_prebody_subheadings(soup, article)
+                or extract_page_subheadings(soup, article)
+            )
+
+        return article
 
     # ========================================================
     # PERIOD FILTER

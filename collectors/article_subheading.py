@@ -308,3 +308,122 @@ def extract_mtn_prebody_subheadings(soup, article):
             return subtitles
 
     return []
+
+
+def extract_article_prebody_subheadings(soup, article):
+    """건설타임즈·안전신문 본문 앞의 편집자 부제목 추출."""
+    if article.source not in {"건설타임즈", "안전신문"}:
+        return []
+
+
+    # 건설타임즈: 본문 상단 h2.subheading의 br 구분 소제목
+    if article.source == "건설타임즈":
+        for tag in soup.select(".article-body h2.subheading"):
+            if tag.find_parent(["nav", "aside", "footer"]):
+                continue
+
+            lines = [
+                clean(line)
+                for line in tag.get_text("\n", strip=True).splitlines()
+            ]
+
+            subtitles = []
+            for line in lines:
+                if not 6 <= len(line) <= 145:
+                    continue
+                if line == clean(article.title):
+                    continue
+                if REJECT_TEXT.search(line):
+                    continue
+                if line not in subtitles:
+                    subtitles.append(line)
+
+            if subtitles:
+                return subtitles[:8]
+
+
+    title = clean(article.title)
+    caption = clean(article.image_caption)
+    existing = {clean(p) for p in (article.paragraphs or [])}
+    found = []
+    seen = set()
+
+    def add(value):
+        text = clean(value)
+
+        if not 6 <= len(text) <= 145:
+            return
+        if text in (title, caption):
+            return
+        if text in seen or REJECT_TEXT.search(text):
+            return
+
+        seen.add(text)
+        found.append(text)
+
+    # 기사 제목 근처에 있는 명시적 부제목.
+    for selector in (
+        ".article-view-header .sub-title",
+        ".article-view-header .subtitle",
+        ".article-view-header h4",
+        ".article-view-header h5",
+        ".article-head h4",
+    ):
+        for tag in soup.select(selector):
+            if not tag.find_parent(["nav", "aside", "footer"]):
+                add(tag.get_text(" ", strip=True))
+
+    # 본문 첫 문단이 시작되기 전의 제목형 태그를 검사.
+    for selector in (
+        "#article-view-content-div",
+        ".article-view-content-div",
+        "#articleBody",
+        ".article-view-body",
+        ".article-content",
+    ):
+        root = soup.select_one(selector)
+        if root is None:
+            continue
+
+        for tag in root.find_all(
+            ["h2", "h3", "h4", "h5", "p"], limit=100
+        ):
+            if tag.find_parent(
+                ["nav", "aside", "footer", "figcaption"]
+            ):
+                continue
+            if tag.find(["img", "table"]):
+                continue
+
+            text = clean(tag.get_text(" ", strip=True))
+            if not text:
+                continue
+
+            if tag.name == "p":
+                bold = tag.find(["strong", "b"])
+                emphasized = (
+                    bold is not None
+                    and clean(bold.get_text(" ", strip=True)) == text
+                )
+
+                if not emphasized:
+                    # 일반 기사 문장이 시작되면 더는 찾지 않는다.
+                    if len(text) >= 20:
+                        break
+                    continue
+
+            if tag.name in ("h2", "h3", "h4", "h5"):
+                # br로 구분된 여러 줄의 부제목도 유지
+                for line in tag.get_text(
+                    "\n", strip=True
+                ).splitlines():
+                    add(line)
+            else:
+                add(text)
+
+            if len(found) >= 8:
+                return found[:8]
+
+        break
+
+    return found[:8]

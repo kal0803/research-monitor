@@ -592,6 +592,46 @@ def collect_dnews_article(url, session=None, listing_date=None):
             or extract_page_subheadings(soup, article)
         )
 
+        # 모바일 기사에서 부제목을 찾지 못한 경우
+        # 같은 기사의 PC 원문을 한 번 더 확인한다.
+        if not article.subheadings:
+            pc_url = desktop_fallback_url(url)
+
+            if pc_url and pc_url != response.url:
+                try:
+                    pc_response = session.get(
+                        pc_url, timeout=20
+                    )
+                    pc_response.raise_for_status()
+
+                    pc_soup = BeautifulSoup(
+                        pc_response.text, "html.parser"
+                    )
+
+                    pc_article = Article(
+                        source=article.source,
+                        title=extract_title(pc_soup) or article.title,
+                        reporter=article.reporter,
+                        published_at=article.published_at,
+                        image_caption=article.image_caption,
+                        paragraphs=article.paragraphs,
+                        url=pc_url,
+                    )
+
+                    article.subheadings = (
+                        extract_dnews_prebody_subheadings(
+                            pc_soup, pc_article
+                        )
+                        or extract_page_subheadings(
+                            pc_soup, pc_article
+                        )
+                    )
+
+                except requests.RequestException as exc:
+                    print(
+                        f"[대한경제 SUBTITLE WARNING] {exc}"
+                    )
+
         if article.subheadings:
             print(
                 "[대한경제 SUBTITLE] "
