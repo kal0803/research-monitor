@@ -28,6 +28,11 @@ class ConTimesCollector(GenericNewsCollector):
 
     ajax_path = "news/ajaxArticlePaging.php"
 
+    def extract_title(self, soup):
+        """OG 제목에 붙는 매체 접미사를 제거한다."""
+        title = super().extract_title(soup) or ""
+        return re.sub(r"\s*[-|]\s*건설타임즈\s*$", "", title).strip()
+
     # ========================================================
     # AJAX SETTINGS
     # ========================================================

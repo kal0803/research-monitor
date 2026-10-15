@@ -1378,12 +1378,11 @@ class GenericNewsCollector(
         )
 
 
-        # 이미지 수집 단계에 의존하지 않고 소제목을 저장.
-        if self.source_name in ("건설타임즈", "안전신문"):
-            article.subheadings = (
-                extract_article_prebody_subheadings(soup, article)
-                or extract_page_subheadings(soup, article)
-            )
+        # 공통 수집기를 쓰는 매체 모두에서 이미지 수집에 앞서 보존한다.
+        article.subheadings = (
+            extract_article_prebody_subheadings(soup, article)
+            or extract_page_subheadings(soup, article)
+        )
 
         return article
 

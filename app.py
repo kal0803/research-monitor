@@ -6,7 +6,6 @@
 무료 클라우드 배포: Streamlit 앱 설정의 Secrets에도 같은 이름으로 등록.
 """
 
-import base64
 from contextlib import contextmanager
 from datetime import date, timedelta
 import hmac
@@ -21,9 +20,6 @@ from st_copy import copy_button
 from formatters.kpsea_formatter import kpsea_html
 from formatters.source_links import public_article_url
 
-from formatters.news_formatter import (
-    excerpt_paragraphs, format_caption, make_byline,
-)
 
 
 load_dotenv()
@@ -147,6 +143,10 @@ def run_from_ui(start, end):
 
 
 def show_report(report):
+    st.caption(
+        f"현재 세션에서 생성한 보고서 · "
+        f"{report.get('generated_at', '생성 시각 정보 없음')}"
+    )
     a, b, c = st.columns(3)
     a.metric("전체 수집", report["raw"])
     b.metric("최종 기사", report["final"])
@@ -172,14 +172,6 @@ def show_report(report):
         with st.expander(f"{number:02d}. {article.title} · {decision}"):
             st.markdown(f"**{article.title}**")
             asset = report["image_assets"].get(article.url)
-            if asset:
-                try:
-                    st.image(base64.b64decode(asset.data_uri.split(",", 1)[1]))
-                except (ValueError, TypeError):
-                    st.caption("이미지 미리보기를 불러오지 못했습니다.")
-                caption = format_caption(article.image_caption)
-                if caption:
-                    st.caption(caption)
             st.markdown("**KPSEA 게시용 복사**")
             title_col, html_col = st.columns(2)
 
@@ -187,6 +179,9 @@ def show_report(report):
                 article,
                 image_url=asset.url if asset else None,
             )
+
+            st.markdown("**본문 미리보기**")
+            st.markdown(html_content, unsafe_allow_html=True)
 
             with title_col:
                 st.caption("① 제목 복사")
@@ -218,11 +213,6 @@ def show_report(report):
 
             st.caption("KPSEA 글쓰기의 html 옵션을 켜고 붙여넣으세요.")
 
-            paragraphs = excerpt_paragraphs(article)
-            if paragraphs:
-                st.write(f"{make_byline(article.source, article.reporter)} {paragraphs[0]}")
-                for p in paragraphs[1:]:
-                    st.write(p)
             st.write(f"원문출처 : [{article.source}][{article.published_at or '날짜 미상'}] {public_article_url(article.url)}")
             st.link_button("원문 기사 열기", public_article_url(article.url))
 
@@ -259,7 +249,8 @@ def show_saved_report(start, end):
             mime="text/plain",
         )
 
-        st.subheader("기존 HTML 보고서 미리보기")
+        st.subheader("저장된 보고서 미리보기 · 기존 생성 파일")
+        st.caption("저장 당시 생성된 HTML입니다. 현재 코드의 기사별 미리보기와 다를 수 있습니다.")
         components.html(
             html_path.read_text(encoding="utf-8"),
             height=900,

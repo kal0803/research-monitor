@@ -26,7 +26,7 @@ article { background: white; border: 1px solid #e2e7ed; border-radius: 14px;
 h2 { font-size: 21px; margin: 0 0 14px; line-height: 1.48; word-break: keep-all; }
 .meta { color: #64748b; font-size: 13px; margin-bottom: 15px; }
 figure { margin: 8px 0 21px; }
-figure img { width: 100%; max-height: 540px; object-fit: contain;
+figure img { width: auto; max-width: 100%; height: auto; max-height: 540px; object-fit: contain;
              border-radius: 8px; background: #f1f3f6; }
 figcaption { color: #202938; font-size: 15px; line-height: 1.8; margin-top: 0; }
 p { font-size: 15px; line-height: 1.86; margin: 0 0 15px; overflow-wrap: anywhere; }
@@ -46,7 +46,18 @@ a { color: #1756a9; overflow-wrap: anywhere; }
 
 def safe_link(value):
     link = str(value or "").strip()
-    return escape(link, quote=True) if urlsplit(link).scheme.lower() in ("http", "https") else ""
+    try:
+        parsed = urlsplit(link)
+        if (
+            parsed.scheme.lower() in ("http", "https")
+            and parsed.hostname
+            and parsed.username is None
+            and parsed.password is None
+        ):
+            return escape(link, quote=True)
+    except ValueError:
+        pass
+    return ""
 
 
 def render_article(article, asset=None, decision="KEEP"):
@@ -81,6 +92,8 @@ def render_article(article, asset=None, decision="KEEP"):
             )
             + "</figure>"
         )
+    elif caption:
+        html.append(f"<p>{escape(caption)}</p>")
 
     if paragraphs:
         html.append(f"<p><span class='byline'>{byline}</span> {escape(paragraphs[0])}</p>")

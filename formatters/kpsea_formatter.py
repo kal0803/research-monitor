@@ -16,7 +16,12 @@ def safe_url(value):
     url = str(value or "").strip()
     try:
         parsed = urlsplit(url)
-        if parsed.scheme in ("http", "https") and parsed.hostname:
+        if (
+            parsed.scheme in ("http", "https")
+            and parsed.hostname
+            and parsed.username is None
+            and parsed.password is None
+        ):
             return url
     except ValueError:
         pass

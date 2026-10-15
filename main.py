@@ -294,6 +294,9 @@ def run_pipeline(start_date, end_date, progress_callback=None):
         "image_assets": image_assets,
         "decisions_by_url": decisions_by_url,
         "source_counts": source_counts,
+        "generated_at": datetime.now().astimezone().strftime(
+            "%Y-%m-%d %H:%M:%S %Z"
+        ),
     }
 
 

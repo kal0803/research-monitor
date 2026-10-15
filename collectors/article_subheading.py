@@ -85,7 +85,7 @@ def extract_page_subheadings(soup, article):
         for tag in soup.select(selector):
             add(tag)
 
-            if len(found) >= 3:
+            if len(found) >= 8:
                 return found
 
     if article.source != "대한경제":
@@ -263,6 +263,12 @@ def is_site_ui_text(value):
     }
 
 
+def is_rejected_subheading(value):
+    """부제목으로 내보내면 안 되는 기자명·UI·광고 문구인지 판단한다."""
+    text = clean(value)
+    return not text or bool(REJECT_TEXT.search(text)) or is_site_ui_text(text)
+
+
 def extract_mtn_prebody_subheadings(soup, article):
     """기사 제목 다음부터 기자명·발행일 전까지의 소제목."""
     lines = [
@@ -355,6 +361,8 @@ def extract_article_prebody_subheadings(soup, article):
             return
         if text in (title, caption):
             return
+        if text in existing:
+            return
         if text in seen or REJECT_TEXT.search(text):
             return
 
@@ -407,10 +415,8 @@ def extract_article_prebody_subheadings(soup, article):
                 )
 
                 if not emphasized:
-                    # 일반 기사 문장이 시작되면 더는 찾지 않는다.
-                    if len(text) >= 20:
-                        break
-                    continue
+                    # 본문 문단이 시작됐으면 이후 소제목 후보를 탐색하지 않는다.
+                    break
 
             if tag.name in ("h2", "h3", "h4", "h5"):
                 # br로 구분된 여러 줄의 부제목도 유지

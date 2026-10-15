@@ -1,4 +1,7 @@
-from collectors.article_subheading import is_site_ui_text
+from collectors.article_subheading import (
+    is_rejected_subheading,
+    is_site_ui_text,
+)
 """최종 출력용 원문 발췌. Rubric 분류에 사용하는 전체 본문은 수정하지 않는다."""
 
 import re
@@ -102,24 +105,6 @@ def strip_duplicate_byline(paragraph, source, reporter):
     return text
 
 
-def is_leading_subheading(text):
-    """본문 앞의 짧은 부제·소제목만 보수적으로 제외한다.
-
-    짧더라도 서술형 기사 문장(예: '~ 밝혔다')이면 본문으로 인정한다.
-    """
-    compact = " ".join(str(text or "").split())
-
-    if not compact or len(compact) > 85:
-        return False
-
-    if compact.endswith((".", "!", "?", "。", "다", "요")):
-        return False
-
-    # 짧은 단편형 구절은 부제일 가능성이 크다.
-    # 원문에서 삭제하는 것이 아니라 보고서에서만 건너뛴다.
-    return True
-
-
 def split_long_paragraph(text):
     """길게 합쳐진 한 문단을 원문 문장/띄어쓰기 경계에서만 구분한다."""
     text = " ".join(str(text or "").split())
@@ -190,13 +175,14 @@ def excerpt_paragraphs(
     article: Article,
     limit=EXCERPT_PARAGRAPHS,
 ):
-    """앞쪽 소제목을 건너뛰고 실제 기사 문장 최대 3문단을 발췌한다.
+    """수집된 소제목과 중복된 문단을 건너뛰고 최대 3문단을 발췌한다.
 
     긴 단일 문단은 원문을 바꾸지 않고 표시용 문단으로 재구성할 수 있다.
     """
     if limit <= 0:
         return []
 
+    known_subheadings = set(article_subheadings(article))
     cleaned = []
 
     for raw in article.paragraphs or []:
@@ -208,12 +194,12 @@ def excerpt_paragraphs(
 
         text = " ".join(text.split())
 
-        if text and not is_site_ui_text(text):
+        if (
+            text
+            and text not in known_subheadings
+            and not is_site_ui_text(text)
+        ):
             cleaned.append(text)
-
-    # 본문이 시작되기 전의 짧은 부제/소제목만 제외한다.
-    while cleaned and is_leading_subheading(cleaned[0]):
-        cleaned.pop(0)
 
     excerpt = []
 
@@ -230,31 +216,13 @@ def excerpt_paragraphs(
 
 
 def article_subheadings(article):
-    """원문 HTML의 소제목과 본문 앞의 부제목을 병합한다."""
+    """수집기가 원문 HTML에서 명시적으로 찾은 부제목만 반환한다."""
     result = []
     seen = set()
 
     for raw in getattr(article, "subheadings", []) or []:
         text = " ".join(str(raw).split())
-        if text and text not in seen and not is_site_ui_text(text):
-            result.append(text)
-            seen.add(text)
-
-    if article.source == "MTN뉴스":
-        return result[:8]
-
-    for raw in article.paragraphs or []:
-        text = strip_duplicate_byline(
-            raw, article.source, article.reporter
-        )
-        text = " ".join(text.split())
-
-        if not text:
-            continue
-        if not is_leading_subheading(text):
-            break
-
-        if len(text) >= 5 and text not in seen:
+        if text and text not in seen and not is_rejected_subheading(text):
             result.append(text)
             seen.add(text)
 
@@ -276,7 +244,7 @@ def format_article(article: Article) -> str:
     ]
 
     for subheading in article_subheadings(article):
-        lines.extend([subheading, ""])
+        lines.extend([f"**{subheading}**", ""])
 
     if article.image_url:
         lines.extend([
